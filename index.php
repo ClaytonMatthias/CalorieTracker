@@ -1,21 +1,39 @@
 <?php
-// PHP Proxy Endpoint to fetch Nutrislice data directly from Silo backend
+// PHP Proxy Endpoint using cURL
 if (isset($_GET['api_action'])) {
     header('Content-Type: application/json');
-    
-    // Set a custom User-Agent so Nutrislice doesn't block the cURL request
-    $options = [
-        'http' => [
-            'method' => 'GET',
-            'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) IU-CalorieTracker/1.0\r\n"
-        ]
-    ];
-    $context = stream_context_create($options);
+
+    // Helper function to make requests using cURL
+    function fetch_remote_data($url) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: application/json, text/plain, */*',
+            'Referer: https://indiana-dining.nutrislice.com/'
+        ]);
+
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($error || $http_code !== 200) {
+            return json_encode([
+                'error' => "Fetch error (HTTP $http_code)",
+                'details' => $error ? $error : "Nutrislice returned HTTP status $http_code"
+            ]);
+        }
+
+        return $response;
+    }
 
     if ($_GET['api_action'] === 'locations') {
         $url = "https://indiana.api.nutrislice.com/menu/api/schools/?format=json";
-        $data = @file_get_contents($url, false, $context);
-        echo $data ? $data : json_encode(['error' => 'Failed to fetch locations from Nutrislice']);
+        echo fetch_remote_data($url);
         exit;
     }
 
@@ -25,14 +43,13 @@ if (isset($_GET['api_action'])) {
         $year = urlencode($_GET['year']);
         $month = urlencode($_GET['month']);
         $day = urlencode($_GET['day']);
-        
+
         $url = "https://indiana.api.nutrislice.com/menu/api/weeks/school/{$loc}/menu-type/{$meal}/{$year}/{$month}/{$day}/?format=json";
-        $data = @file_get_contents($url, false, $context);
-        echo $data ? $data : json_encode(['error' => 'Failed to fetch menu data']);
+        echo fetch_remote_data($url);
         exit;
     }
 
-    echo json_encode(['error' => 'Invalid action']);
+    echo json_encode(['error' => 'Invalid API action']);
     exit;
 }
 ?>
