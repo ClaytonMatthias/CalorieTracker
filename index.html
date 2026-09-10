@@ -167,10 +167,10 @@
 
   document.getElementById('dateSelect').valueAsDate = new Date();
 
-  // Multi-proxy fallback system
+  // Multi-proxy with automatic JSON unwrapping
   async function fetchMultiProxy(targetUrl) {
     const proxies = [
-      url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
       url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
       url => `https://thingproxy.freeboard.io/fetch/${url}`
     ];
@@ -182,46 +182,111 @@
         const proxyUrl = createProxyUrl(targetUrl);
         const res = await fetch(proxyUrl);
         
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        const text = await res.text();
+        let raw = await res.json();
         
-        // Ensure the proxy returned JSON and not an HTML error/challenge page
-        if (text.trim().startsWith('<')) {
-          throw new Error("Returned HTML instead of JSON");
+        // Handle AllOrigins wrapper output format ({ contents: "..." })
+        if (raw && raw.contents) {
+          try {
+            raw = JSON.parse(raw.contents);
+          } catch (e) {
+            raw = raw.contents;
+          }
         }
 
-        return JSON.parse(text);
+        if (typeof raw === 'string' && raw.trim().startsWith('<')) {
+          throw new Error("Proxy returned HTML instead of JSON");
+        }
+
+        return raw;
       } catch (err) {
         lastError = err;
-        // Continue to the next proxy in the list
       }
     }
 
-    throw new Error(lastError ? lastError.message : "All public proxies failed to fetch data.");
+    throw new Error(lastError ? lastError.message : "All proxies failed.");
   }
 
   async function loadLocations() {
+    const select = document.getElementById('locationSelect');
+    
     try {
-      const url = 'https://indiana-dining.nutrislice.com/menu/api/schools/?format=json';
-      locations = await fetchMultiProxy(url);
+      // Try fetching live list from API
+      const primaryUrl = 'https://indiana-dining.nutrislice.com/menu/api/schools/?format=json';
+      let resData = await fetchMultiProxy(primaryUrl);
 
-      const select = document.getElementById('locationSelect');
-      select.innerHTML = '<option value="">Select Location</option>';
-      
-      locations.forEach(loc => {
-        const opt = document.createElement('option');
-        opt.value = loc.slug;
-        opt.textContent = loc.name;
-        select.appendChild(opt);
-      });
+      // Handle standard Nutrislice response formats
+      if (Array.isArray(resData)) {
+        locations = resData;
+      } else if (resData && Array.isArray(resData.schools)) {
+        locations = resData.schools;
+      } else if (resData && Array.isArray(resData.results)) {
+        locations = resData.results;
+      }
 
-      select.addEventListener('change', populateMeals);
+      if (!locations || locations.length === 0) {
+        throw new Error("No array found in API response");
+      }
+
+      populateLocationDropdown();
     } catch (err) {
-      document.getElementById('menuContainer').innerHTML = `<p style="color:red">Failed to load dining locations: ${err.message}</p>`;
+      console.warn("API location fetch failed, using known IU locations fallback:", err);
+      
+      // Known IU Nutrislice Locations fallback if API listing is blocked
+      locations = [
+        {
+          name: "McNutt Dining Hall",
+          slug: "mcnutt-dining-hall",
+          active_menu_types: [
+            { name: "Breakfast", slug: "breakfast" },
+            { name: "Lunch", slug: "lunch" },
+            { name: "Dinner", slug: "dinner" }
+          ]
+        },
+        {
+          name: "Forest Dining Hall",
+          slug: "forest-dining-hall",
+          active_menu_types: [
+            { name: "Breakfast", slug: "breakfast" },
+            { name: "Lunch", slug: "lunch" },
+            { name: "Dinner", slug: "dinner" }
+          ]
+        },
+        {
+          name: "Collins Eatery",
+          slug: "collins-eatery",
+          active_menu_types: [
+            { name: "Lunch", slug: "lunch" },
+            { name: "Dinner", slug: "dinner" }
+          ]
+        },
+        {
+          name: "Goodbody Hall Eatery",
+          slug: "goodbody-hall-eatery",
+          active_menu_types: [
+            { name: "Lunch", slug: "lunch" },
+            { name: "Dinner", slug: "dinner" }
+          ]
+        }
+      ];
+
+      populateLocationDropdown();
     }
+  }
+
+  function populateLocationDropdown() {
+    const select = document.getElementById('locationSelect');
+    select.innerHTML = '<option value="">Select Location</option>';
+    
+    locations.forEach(loc => {
+      const opt = document.createElement('option');
+      opt.value = loc.slug;
+      opt.textContent = loc.name;
+      select.appendChild(opt);
+    });
+
+    select.addEventListener('change', populateMeals);
   }
 
   function populateMeals() {
@@ -236,7 +301,7 @@
     const loc = locations.find(l => l.slug === locSlug);
     mealSelect.innerHTML = '';
     
-    if (loc && loc.active_menu_types) {
+    if (loc && loc.active_menu_types && loc.active_menu_types.length > 0) {
       loc.active_menu_types.forEach(menu => {
         const opt = document.createElement('option');
         opt.value = menu.slug;
@@ -245,7 +310,14 @@
       });
       mealSelect.disabled = false;
     } else {
-      mealSelect.innerHTML = '<option value="">No meals found</option>';
+      // Generic fallback options if dynamic meal types are empty
+      ['breakfast', 'lunch', 'dinner'].forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m.charAt(0).toUpperCase() + m.slice(1);
+        mealSelect.appendChild(opt);
+      });
+      mealSelect.disabled = false;
     }
   }
 
@@ -276,7 +348,7 @@
     const container = document.getElementById('menuContainer');
     container.innerHTML = '';
 
-    const dayData = data.days ? data.days.find(d => d.date === selectedDate) : null;
+    const dayData = data && data.days ? data.days.find(d => d.date === selectedDate) : null;
 
     if (!dayData || !dayData.menu_items || dayData.menu_items.length === 0) {
       container.innerHTML = '<p>No menu items available for this date/meal selection.</p>';
