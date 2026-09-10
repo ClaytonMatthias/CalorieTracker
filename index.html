@@ -167,19 +167,46 @@
 
   document.getElementById('dateSelect').valueAsDate = new Date();
 
-  // Primary fetch helper using CORS Proxy
-  async function fetchProxy(targetUrl) {
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-    const data = await res.json();
-    return data;
+  // Multi-proxy fallback system
+  async function fetchMultiProxy(targetUrl) {
+    const proxies = [
+      url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      url => `https://thingproxy.freeboard.io/fetch/${url}`
+    ];
+
+    let lastError = null;
+
+    for (const createProxyUrl of proxies) {
+      try {
+        const proxyUrl = createProxyUrl(targetUrl);
+        const res = await fetch(proxyUrl);
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const text = await res.text();
+        
+        // Ensure the proxy returned JSON and not an HTML error/challenge page
+        if (text.trim().startsWith('<')) {
+          throw new Error("Returned HTML instead of JSON");
+        }
+
+        return JSON.parse(text);
+      } catch (err) {
+        lastError = err;
+        // Continue to the next proxy in the list
+      }
+    }
+
+    throw new Error(lastError ? lastError.message : "All public proxies failed to fetch data.");
   }
 
   async function loadLocations() {
     try {
       const url = 'https://indiana-dining.nutrislice.com/menu/api/schools/?format=json';
-      locations = await fetchProxy(url);
+      locations = await fetchMultiProxy(url);
 
       const select = document.getElementById('locationSelect');
       select.innerHTML = '<option value="">Select Location</option>';
@@ -238,7 +265,7 @@
 
     try {
       const url = `https://indiana-dining.nutrislice.com/menu/api/weeks/school/${loc}/menu-type/${meal}/${year}/${month}/${day}/?format=json`;
-      const data = await fetchProxy(url);
+      const data = await fetchMultiProxy(url);
       renderMenu(data, dateVal);
     } catch (err) {
       container.innerHTML = `<p style="color:red;">Error fetching menu: ${err.message}</p>`;
