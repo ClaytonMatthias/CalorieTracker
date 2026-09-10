@@ -1,15 +1,21 @@
 <?php
-// PHP Proxy Endpoint using cURL
+// PHP Proxy Endpoint using Nutrislice Frontend Domain
 if (isset($_GET['api_action'])) {
     header('Content-Type: application/json');
 
-    // Helper function to make requests using cURL
     function fetch_remote_data($url) {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        
+        // Disable SSL certificate verification for Silo compatibility
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+        // Standard browser headers
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept: application/json, text/plain, */*',
@@ -32,7 +38,8 @@ if (isset($_GET['api_action'])) {
     }
 
     if ($_GET['api_action'] === 'locations') {
-        $url = "https://indiana.api.nutrislice.com/menu/api/schools/?format=json";
+        // Updated to use indiana-dining.nutrislice.com
+        $url = "https://indiana-dining.nutrislice.com/menu/api/schools/?format=json";
         echo fetch_remote_data($url);
         exit;
     }
@@ -44,7 +51,8 @@ if (isset($_GET['api_action'])) {
         $month = urlencode($_GET['month']);
         $day = urlencode($_GET['day']);
 
-        $url = "https://indiana.api.nutrislice.com/menu/api/weeks/school/{$loc}/menu-type/{$meal}/{$year}/{$month}/{$day}/?format=json";
+        // Updated to use indiana-dining.nutrislice.com
+        $url = "https://indiana-dining.nutrislice.com/menu/api/weeks/school/{$loc}/menu-type/{$meal}/{$year}/{$month}/{$day}/?format=json";
         echo fetch_remote_data($url);
         exit;
     }
