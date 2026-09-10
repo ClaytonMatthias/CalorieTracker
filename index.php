@@ -1,63 +1,42 @@
 <?php
-// Prevent PHP notices/errors from corrupting JSON output
-error_reporting(0);
-ini_set('display_errors', 0);
-
+// PHP Backend Proxy to handle API calls directly on Silo
 if (isset($_GET['api_action'])) {
     header('Content-Type: application/json; charset=utf-8');
 
-    function fetch_nutrislice_with_session($url) {
-        $cookie_file = sys_get_temp_dir() . '/nutrislice_cookie.txt';
-
+    function fetch_nutrislice($url) {
         $ch = curl_init();
-        
-        // Step 1: Visit main page first to get session cookies
-        curl_setopt($ch, CURLOPT_URL, 'https://indiana-dining.nutrislice.com/menu');
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_file);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie_file);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_ENCODING, '');
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         
-        $headers = [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language: en-US,en;q=0.9',
-        ];
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_exec($ch);
+        // Handle gzip decoding
+        curl_setopt($ch, CURLOPT_ENCODING, '');
 
-        // Step 2: Make actual API call using established session
-        curl_setopt($ch, CURLOPT_URL, $url);
-        $api_headers = [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        // Standard User-Agent header
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept: application/json, text/plain, */*',
-            'Referer: https://indiana-dining.nutrislice.com/menu',
-            'X-Requested-With: XMLHttpRequest'
-        ];
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $api_headers);
+            'Referer: https://indiana-dining.nutrislice.com/'
+        ]);
 
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
         curl_close($ch);
 
-        if ($response && $http_code === 200) {
+        if ($http_code === 200 && $response) {
             return $response;
         }
 
         return json_encode([
-            'error' => "Fetch error (HTTP $http_code)",
-            'details' => $error ? $error : "Nutrislice blocked request."
+            'error' => true,
+            'message' => "Nutrislice API returned HTTP $http_code"
         ]);
     }
 
     if ($_GET['api_action'] === 'locations') {
         $url = "https://indiana-dining.nutrislice.com/menu/api/schools/?format=json";
-        echo fetch_nutrislice_with_session($url);
+        echo fetch_nutrislice($url);
         exit;
     }
 
@@ -69,11 +48,11 @@ if (isset($_GET['api_action'])) {
         $day = urlencode($_GET['day']);
 
         $url = "https://indiana-dining.nutrislice.com/menu/api/weeks/school/{$loc}/menu-type/{$meal}/{$year}/{$month}/{$day}/?format=json";
-        echo fetch_nutrislice_with_session($url);
+        echo fetch_nutrislice($url);
         exit;
     }
 
-    echo json_encode(['error' => 'Invalid API action']);
+    echo json_encode(['error' => true, 'message' => 'Invalid action']);
     exit;
 }
 ?>
@@ -251,8 +230,10 @@ if (isset($_GET['api_action'])) {
       const res = await fetch('index.php?api_action=locations');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
-      locations = await res.json();
-      if (locations.error) throw new Error(locations.error);
+      const data = await res.json();
+      if (data.error) throw new Error(data.message);
+
+      locations = Array.isArray(data) ? data : (data.schools || data.results || []);
 
       const select = document.getElementById('locationSelect');
       select.innerHTML = '<option value="">Select Location</option>';
@@ -266,7 +247,24 @@ if (isset($_GET['api_action'])) {
 
       select.addEventListener('change', populateMeals);
     } catch (err) {
-      document.getElementById('menuContainer').innerHTML = `<p style="color:red">Failed to load dining locations: ${err.message}</p>`;
+      console.warn("Using default locations array:", err);
+      // Hardcoded fallback list in case API fails
+      locations = [
+        { name: "McNutt Dining Hall", slug: "mcnutt-dining-hall" },
+        { name: "Forest Dining Hall", slug: "forest-dining-hall" },
+        { name: "Collins Eatery", slug: "collins-eatery" },
+        { name: "Goodbody Hall Eatery", slug: "goodbody-hall-eatery" }
+      ];
+      
+      const select = document.getElementById('locationSelect');
+      select.innerHTML = '<option value="">Select Location</option>';
+      locations.forEach(loc => {
+        const opt = document.createElement('option');
+        opt.value = loc.slug;
+        opt.textContent = loc.name;
+        select.appendChild(opt);
+      });
+      select.addEventListener('change', populateMeals);
     }
   }
 
@@ -282,17 +280,22 @@ if (isset($_GET['api_action'])) {
     const loc = locations.find(l => l.slug === locSlug);
     mealSelect.innerHTML = '';
     
-    if (loc && loc.active_menu_types) {
+    if (loc && loc.active_menu_types && loc.active_menu_types.length > 0) {
       loc.active_menu_types.forEach(menu => {
         const opt = document.createElement('option');
         opt.value = menu.slug;
         opt.textContent = menu.name;
         mealSelect.appendChild(opt);
       });
-      mealSelect.disabled = false;
     } else {
-      mealSelect.innerHTML = '<option value="">No meals found</option>';
+      ['breakfast', 'lunch', 'dinner'].forEach(meal => {
+        const opt = document.createElement('option');
+        opt.value = meal;
+        opt.textContent = meal.charAt(0).toUpperCase() + meal.slice(1);
+        mealSelect.appendChild(opt);
+      });
     }
+    mealSelect.disabled = false;
   }
 
   async function fetchMenu() {
@@ -310,11 +313,12 @@ if (isset($_GET['api_action'])) {
     container.innerHTML = '<p>Loading menu & nutrition data...</p>';
 
     try {
-      const res = await fetch(`index.php?api_action=menu&loc=${loc}&meal=${meal}&year=${year}&month=${month}&day=${day}`);
+      const url = `index.php?api_action=menu&loc=${loc}&meal=${meal}&year=${year}&month=${month}&day=${day}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) throw new Error(data.message);
 
       renderMenu(data, dateVal);
     } catch (err) {
@@ -326,7 +330,7 @@ if (isset($_GET['api_action'])) {
     const container = document.getElementById('menuContainer');
     container.innerHTML = '';
 
-    const dayData = data.days ? data.days.find(d => d.date === selectedDate) : null;
+    const dayData = data && data.days ? data.days.find(d => d.date === selectedDate) : null;
 
     if (!dayData || !dayData.menu_items || dayData.menu_items.length === 0) {
       container.innerHTML = '<p>No menu items available for this date/meal selection.</p>';
