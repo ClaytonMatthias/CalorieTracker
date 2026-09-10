@@ -1,43 +1,82 @@
 <?php
-// PHP Proxy Endpoint using Nutrislice Frontend Domain with Gzip Decoding
+// Prevent PHP notices/errors from injecting HTML into JSON output
+error_reporting(0);
+ini_set('display_errors', 0);
+
 if (isset($_GET['api_action'])) {
-    header('Content-Type: application/json');
+    header('Content-Type: application/json; charset=utf-8');
 
     function fetch_remote_data($url) {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        
-        // AUTO-DECODE GZIP / COMPRESSED RESPONSES
-        curl_setopt($ch, CURLOPT_ENCODING, '');
+        // Method A: cURL with full browser impersonation
+        if (function_exists('curl_init')) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            
+            // Auto-decode gzip compression
+            curl_setopt($ch, CURLOPT_ENCODING, '');
 
-        // Disable SSL certificate verification for Silo compatibility
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            // Bypass SSL verification issues on Silo
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
 
-        // Standard browser headers
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept: application/json, text/plain, */*',
-            'Referer: https://indiana-dining.nutrislice.com/'
-        ]);
-
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($error || $http_code !== 200) {
-            return json_encode([
-                'error' => "Fetch error (HTTP $http_code)",
-                'details' => $error ? $error : "Nutrislice returned HTTP status $http_code"
+            // Full set of headers matching a desktop browser
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept: application/json, text/plain, */*',
+                'Accept-Language: en-US,en;q=0.9',
+                'Referer: https://indiana-dining.nutrislice.com/menu',
+                'Origin: https://indiana-dining.nutrislice.com',
+                'Sec-Fetch-Dest: empty',
+                'Sec-Fetch-Mode: cors',
+                'Sec-Fetch-Site: same-origin'
             ]);
+
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+
+            // Validate if response is actually valid JSON
+            if ($response && $http_code === 200) {
+                $test = json_decode($response);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    return $response;
+                }
+            }
         }
 
-        return $response;
+        // Method B: Stream context fallback if cURL is blocked
+        $opts = [
+            "http" => [
+                "method" => "GET",
+                "header" => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n" .
+                            "Accept: application/json\r\n" .
+                            "Referer: https://indiana-dining.nutrislice.com/\r\n"
+            ],
+            "ssl" => [
+                "verify_peer" => false,
+                "verify_peer_name" => false
+            ]
+        ];
+        $context = stream_context_create($opts);
+        $fallback = @file_get_contents($url, false, $context);
+
+        if ($fallback) {
+            $test = json_decode($fallback);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $fallback;
+            }
+        }
+
+        return json_encode([
+            'error' => "Failed to retrieve valid JSON from Nutrislice.",
+            'details' => isset($error) ? $error : "Server returned non-JSON/HTML payload."
+        ]);
     }
 
     if ($_GET['api_action'] === 'locations') {
