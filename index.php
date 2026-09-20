@@ -1,16 +1,27 @@
 <?php
-// Handle local JSON fetch requests from the front-end JS
-if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
+// Handle JSON request from JS based on chosen location
+if (isset($_GET['api_action']) && $_GET['api_action'] === 'menu') {
     header('Content-Type: application/json; charset=utf-8');
 
-    $jsonFile = __DIR__ . '/sample_menu.json';
+    // Map location slugs to synced JSON filenames
+    $locationMap = [
+        'wright-quad-dining-hall' => 'wright.json',
+        'mcnutt-dining-hall'      => 'mcnutt.json',
+        'forest-dining-hall'      => 'forest.json',
+        'collins-eatery'          => 'collins.json',
+        'goodbody-hall-eatery'    => 'goodbody.json'
+    ];
+
+    $loc = $_GET['loc'] ?? 'mcnutt-dining-hall';
+    $fileName = $locationMap[$loc] ?? 'sample_menu.json';
+    $jsonFile = __DIR__ . '/' . $fileName;
 
     if (file_exists($jsonFile)) {
         echo file_get_contents($jsonFile);
     } else {
         echo json_encode([
             'error' => true,
-            'message' => 'sample_menu.json not found on Silo yet.'
+            'message' => "Menu file ($fileName) not found on Silo yet."
         ]);
     }
     exit;
@@ -147,9 +158,11 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       <h2>Find Food</h2>
       <div class="controls">
         <select id="locationSelect">
-          <option value="mcnutt-dining-hall">McNutt Dining Hall</option>
-          <option value="forest-dining-hall">Forest Dining Hall</option>
-          <option value="collins-eatery">Collins Eatery</option>
+           <option value="wright-quad-dining-hall">Wright Quad Dining Hall</option>
+           <option value="mcnutt-dining-hall">McNutt Dining Hall</option>
+           <option value="forest-dining-hall">Forest Dining Hall</option>
+           <option value="collins-eatery">Collins Eatery</option>
+           <option value="goodbody-hall-eatery">Goodbody Hall Eatery</option>
         </select>
         <select id="mealSelect">
           <option value="lunch">Lunch</option>
@@ -188,13 +201,14 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
 
   document.getElementById('dateSelect').valueAsDate = new Date();
 
-  async function fetchMenu() {
+async function fetchMenu() {
+    const loc = document.getElementById('locationSelect').value;
     const container = document.getElementById('menuContainer');
     container.innerHTML = '<p>Loading synced menu & nutrition data...</p>';
 
     try {
-      // Fetch directly from the local JSON synced by your Raspberry Pi
-      const res = await fetch('index.php?api_action=menu');
+      // Pass the selected location slug to PHP
+      const res = await fetch(`index.php?api_action=menu&loc=${loc}`);
       const data = await res.json();
 
       if (data.error) {
@@ -203,8 +217,8 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
 
       renderMenu(data);
     } catch (err) {
-      console.error("Error reading local menu JSON:", err);
-      container.innerHTML = `<p style="color:#ff5252;">⚠️ Unable to load menu data (${err.message}). Ensure <code>sample_menu.json</code> is uploaded on Silo.</p>`;
+      console.error("Error reading menu JSON:", err);
+      container.innerHTML = `<p style="color:#ff5252;">⚠️ Unable to load menu data (${err.message}).</p>`;
     }
   }
 
