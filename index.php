@@ -1,64 +1,18 @@
 <?php
-// PHP Backend Proxy
-if (isset($_GET['api_action'])) {
+// Handle local JSON fetch requests from the front-end JS
+if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
     header('Content-Type: application/json; charset=utf-8');
 
-    function fetch_nutrislice($url) {
-        if (!function_exists('curl_init')) {
-            return json_encode([
-                'error' => true,
-                'message' => 'PHP cURL module is not enabled on this server.'
-            ]);
-        }
+    $jsonFile = __DIR__ . '/sample_menu.json';
 
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_ENCODING, '');
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept: application/json',
-            'Referer: https://indiana-dining.nutrislice.com/'
-        ]);
-
-        $response = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($http_code === 200 && $response) {
-            // Verify payload is valid JSON and not HTML
-            $decoded = json_decode($response);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                return $response;
-            }
-        }
-
-        return json_encode([
+    if (file_exists($jsonFile)) {
+        echo file_get_contents($jsonFile);
+    } else {
+        echo json_encode([
             'error' => true,
-            'message' => "Nutrislice returned HTTP $http_code or an HTML challenge page."
+            'message' => 'sample_menu.json not found on Silo yet.'
         ]);
     }
-
-    if ($_GET['api_action'] === 'locations') {
-        echo fetch_nutrislice("https://indiana-dining.nutrislice.com/menu/api/schools/?format=json");
-        exit;
-    }
-
-    if ($_GET['api_action'] === 'menu' && isset($_GET['loc'], $_GET['meal'], $_GET['year'], $_GET['month'], $_GET['day'])) {
-        $loc = urlencode($_GET['loc']);
-        $meal = urlencode($_GET['meal']);
-        $year = urlencode($_GET['year']);
-        $month = urlencode($_GET['month']);
-        $day = urlencode($_GET['day']);
-
-        $url = "https://indiana-dining.nutrislice.com/menu/api/weeks/school/{$loc}/menu-type/{$meal}/{$year}/{$month}/{$day}/?format=json";
-        echo fetch_nutrislice($url);
-        exit;
-    }
-
-    echo json_encode(['error' => true, 'message' => 'Invalid action']);
     exit;
 }
 ?>
@@ -193,17 +147,21 @@ if (isset($_GET['api_action'])) {
       <h2>Find Food</h2>
       <div class="controls">
         <select id="locationSelect">
-          <option value="">Loading locations...</option>
+          <option value="mcnutt-dining-hall">McNutt Dining Hall</option>
+          <option value="forest-dining-hall">Forest Dining Hall</option>
+          <option value="collins-eatery">Collins Eatery</option>
         </select>
-        <select id="mealSelect" disabled>
-          <option value="">Select Location First</option>
+        <select id="mealSelect">
+          <option value="lunch">Lunch</option>
+          <option value="breakfast">Breakfast</option>
+          <option value="dinner">Dinner</option>
         </select>
         <input type="date" id="dateSelect">
         <button id="fetchBtn" onclick="fetchMenu()">Get Menu</button>
       </div>
 
       <div id="menuContainer">
-        <p style="color: var(--subtext);">Select a location and meal to view items.</p>
+        <p style="color: var(--subtext);">Select options above and click "Get Menu" to display items.</p>
       </div>
     </div>
   </main>
@@ -226,167 +184,73 @@ if (isset($_GET['api_action'])) {
 </div>
 
 <script>
-  let locations = [];
   let loggedFood = JSON.parse(localStorage.getItem('iu_cals_log')) || [];
 
   document.getElementById('dateSelect').valueAsDate = new Date();
 
-  async function loadLocations() {
-    try {
-      const res = await fetch('index.php?api_action=locations');
-      const text = await res.text();
-
-      // Check for raw HTML before parsing JSON
-      if (text.trim().startsWith('<')) {
-        throw new Error("Server returned HTML error");
-      }
-
-      const data = JSON.parse(text);
-      if (data.error) throw new Error(data.message);
-
-      locations = Array.isArray(data) ? data : (data.schools || data.results || []);
-      populateLocationDropdown();
-    } catch (err) {
-      console.warn("Using default locations array:", err);
-      locations = [
-        { name: "McNutt Dining Hall", slug: "mcnutt-dining-hall" },
-        { name: "Forest Dining Hall", slug: "forest-dining-hall" },
-        { name: "Collins Eatery", slug: "collins-eatery" },
-        { name: "Goodbody Hall Eatery", slug: "goodbody-hall-eatery" }
-      ];
-      populateLocationDropdown();
-    }
-  }
-
-  function populateLocationDropdown() {
-    const select = document.getElementById('locationSelect');
-    select.innerHTML = '<option value="">Select Location</option>';
-    locations.forEach(loc => {
-      const opt = document.createElement('option');
-      opt.value = loc.slug;
-      opt.textContent = loc.name;
-      select.appendChild(opt);
-    });
-    select.addEventListener('change', populateMeals);
-  }
-
-  function populateMeals() {
-    const locSlug = document.getElementById('locationSelect').value;
-    const mealSelect = document.getElementById('mealSelect');
-    
-    if (!locSlug) {
-      mealSelect.disabled = true;
-      return;
-    }
-
-    mealSelect.innerHTML = '';
-    ['breakfast', 'lunch', 'dinner'].forEach(meal => {
-      const opt = document.createElement('option');
-      opt.value = meal;
-      opt.textContent = meal.charAt(0).toUpperCase() + meal.slice(1);
-      mealSelect.appendChild(opt);
-    });
-    mealSelect.disabled = false;
-  }
-
   async function fetchMenu() {
-    const loc = document.getElementById('locationSelect').value;
-    const meal = document.getElementById('mealSelect').value;
-    const dateVal = document.getElementById('dateSelect').value;
-
-    if (!loc || !meal || !dateVal) {
-      alert("Please select a location, meal type, and date.");
-      return;
-    }
-
-    const [year, month, day] = dateVal.split('-');
     const container = document.getElementById('menuContainer');
-    container.innerHTML = '<p>Loading menu & nutrition data...</p>';
+    container.innerHTML = '<p>Loading synced menu & nutrition data...</p>';
 
     try {
-      const url = `index.php?api_action=menu&loc=${loc}&meal=${meal}&year=${year}&month=${month}&day=${day}`;
-      const res = await fetch(url);
-      const text = await res.text();
-
-      if (text.trim().startsWith('<')) {
-        throw new Error("API returned an HTML response instead of JSON");
-      }
-
-      const data = JSON.parse(text);
+      // Fetch directly from the local JSON synced by your Raspberry Pi
+      const res = await fetch('index.php?api_action=menu');
+      const data = await res.json();
 
       if (data.error) {
         throw new Error(data.message);
       }
 
-      renderMenu(data, dateVal);
+      renderMenu(data);
     } catch (err) {
-      console.warn("API block detected. Rendering offline sample menu fallback.", err);
-      renderFallbackMenu(loc, meal);
+      console.error("Error reading local menu JSON:", err);
+      container.innerHTML = `<p style="color:#ff5252;">⚠️ Unable to load menu data (${err.message}). Ensure <code>sample_menu.json</code> is uploaded on Silo.</p>`;
     }
   }
 
-  function renderFallbackMenu(locName, mealName) {
-    const container = document.getElementById('menuContainer');
-    container.innerHTML = `<p style="color:#ffa726; font-size:0.85rem;">⚠️ Nutrislice API is currently blocking external server IP queries. Showing offline sample menu for project evaluation:</p>`;
-
-    const fallbackItems = [
-      { name: "Grilled Chicken Breast", cals: 220, protein: 38, carbs: 0, fat: 5, size: "1 piece" },
-      { name: "Steamed Broccoli", cals: 55, protein: 4, carbs: 11, fat: 1, size: "1 cup" },
-      { name: "Brown Rice", cals: 215, protein: 5, carbs: 45, fat: 2, size: "1 cup" },
-      { name: "Garden Salad", cals: 90, protein: 2, carbs: 8, fat: 6, size: "1 bowl" },
-      { name: "Baked Salmon", cals: 280, protein: 30, carbs: 0, fat: 16, size: "1 fillet" }
-    ];
-
-    fallbackItems.forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'menu-item';
-      div.innerHTML = `
-        <div class="item-info">
-          <h4 style="margin: 0 0 5px 0;">${item.name} <small style="color:#aaa">(${item.size})</small></h4>
-          <div class="item-meta">
-            <strong>${item.cals} Cals</strong> | P: ${item.protein}g | C: ${item.carbs}g | F: ${item.fat}g
-          </div>
-        </div>
-        <button onclick="addFood('${escapeQuotes(item.name)}', ${item.cals})" style="width: auto;">+ Add</button>
-      `;
-      container.appendChild(div);
-    });
-  }
-
-  function renderMenu(data, selectedDate) {
+  function renderMenu(data) {
     const container = document.getElementById('menuContainer');
     container.innerHTML = '';
 
-    const dayData = data && data.days ? data.days.find(d => d.date === selectedDate) : null;
+    let itemsFound = false;
 
-    if (!dayData || !dayData.menu_items || dayData.menu_items.length === 0) {
-      container.innerHTML = '<p>No menu items available for this date/meal selection.</p>';
-      return;
+    // Traverse Nutrislice days -> menu_items -> food
+    if (data && data.days && Array.isArray(data.days)) {
+      data.days.forEach(day => {
+        if (day.menu_items && Array.isArray(day.menu_items)) {
+          day.menu_items.forEach(item => {
+            if (!item.food || !item.food.name) return;
+
+            itemsFound = true;
+            const food = item.food;
+            
+            // Extract nutrition info safely
+            const cals = food.rounded_nutrition_info?.calories ?? food.nutrition_info?.calories ?? 0;
+            const protein = food.rounded_nutrition_info?.g_protein ?? food.nutrition_info?.g_protein ?? 'N/A';
+            const carbs = food.rounded_nutrition_info?.g_carbs ?? food.nutrition_info?.g_carbs ?? 'N/A';
+            const fat = food.rounded_nutrition_info?.g_fat ?? food.nutrition_info?.g_fat ?? 'N/A';
+            const size = food.serving_size ? `(${food.serving_size})` : '';
+
+            const div = document.createElement('div');
+            div.className = 'menu-item';
+            div.innerHTML = `
+              <div class="item-info">
+                <h4 style="margin: 0 0 5px 0;">${food.name} <small style="color:#aaa">${size}</small></h4>
+                <div class="item-meta">
+                  <strong>${cals} Cals</strong> | P: ${protein}g | C: ${carbs}g | F: ${fat}g
+                </div>
+              </div>
+              <button onclick="addFood('${escapeQuotes(food.name)}', ${cals})" style="width: auto;">+ Add</button>
+            `;
+            container.appendChild(div);
+          });
+        }
+      });
     }
 
-    dayData.menu_items.forEach(item => {
-      if (!item.food || !item.food.name) return;
-
-      const food = item.food;
-      const cals = food.calories || 0;
-      const protein = food.protein || 'N/A';
-      const carbs = food.carbohydrates || 'N/A';
-      const fat = food.total_fat || 'N/A';
-      const size = food.serving_size ? `(${food.serving_size})` : '';
-
-      const div = document.createElement('div');
-      div.className = 'menu-item';
-      div.innerHTML = `
-        <div class="item-info">
-          <h4 style="margin: 0 0 5px 0;">${food.name} <small style="color:#aaa">${size}</small></h4>
-          <div class="item-meta">
-            <strong>${cals} Cals</strong> | P: ${protein}g | C: ${carbs}g | F: ${fat}g
-          </div>
-        </div>
-        <button onclick="addFood('${escapeQuotes(food.name)}', ${cals})" style="width: auto;">+ Add</button>
-      `;
-      container.appendChild(div);
-    });
+    if (!itemsFound) {
+      container.innerHTML = '<p>No menu items found in the synced JSON file.</p>';
+    }
   }
 
   function escapeQuotes(str) {
@@ -435,7 +299,8 @@ if (isset($_GET['api_action'])) {
     totalEl.textContent = totalCals;
   }
 
-  loadLocations();
+  // Load menu automatically when page loads
+  fetchMenu();
   saveAndRenderLog();
 </script>
 </body>
