@@ -172,205 +172,304 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
   </style>
 </head>
 <body>
+<!-- Main Dynamic Content Area -->
+<div id="menuContainer">
+  <div class="loading-spinner">Loading menu data...</div>
+</div>
 
-  <header>
-    <h1>IU Dining Hall Calorie Tracker</h1>
-  </header>
-
-  <div class="container">
-    <!-- Controls Layout -->
-    <div class="controls-grid">
-      <div class="control-group">
-        <label for="locationSelect">Dining Hall</label>
-        <select id="locationSelect" onchange="loadMenu()">
-          <option value="mcnutt-dining-hall">McNutt Dining Hall</option>
-          <option value="forest-dining-hall">Forest Dining Hall</option>
-          <option value="wright-eatery">Wright Eatery</option>
-          <option value="collins-eatery">Collins Eatery</option>
-          <option value="goodbody-hall-eatery">Goodbody Hall Eatery</option>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label for="stationFilter">Station Filter</label>
-        <select id="stationFilter" onchange="applyFilters()">
-          <option value="all">All Stations</option>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label for="searchInput">Search Food</label>
-        <input 
-          type="text" 
-          id="searchInput" 
-          placeholder="e.g. Chicken, Pizza, Salad..." 
-          onkeyup="applyFilters()"
-        />
-      </div>
-    </div>
-
-    <!-- Main Dynamic Content Area -->
-    <div id="menuContainer">
-      <div class="loading-spinner">Loading menu data...</div>
-    </div>
+<!-- Sticky Tracker Bar at the bottom of the viewport -->
+<div id="trackerBar" class="tracker-bar">
+  <div class="tracker-summary">
+    <div><strong>Calories:</strong> <span id="totalCals">0</span> kcal</div>
+    <div><strong>Protein:</strong> <span id="totalProtein">0</span>g</div>
+    <div><strong>Carbs:</strong> <span id="totalCarbs">0</span>g</div>
+    <div><strong>Fat:</strong> <span id="totalFat">0</span>g</div>
   </div>
+  <button class="btn-toggle-log" onclick="toggleLogDrawer()">View Log (<span id="logCount">0</span>)</button>
+</div>
 
- <script>
-    let currentRawData = null;
+<!-- Sliding Log Drawer -->
+<div id="logDrawer" class="log-drawer hidden">
+  <h3>My Meal Log</h3>
+  <div id="logItemsContainer" class="log-items-container">
+    <p class="empty-msg">No items added yet. Click "+ Add" on menu items above!</p>
+  </div>
+</div>
 
-    // Fetch JSON menu data for the selected location
-    async function loadMenu() {
-      const location = document.getElementById('locationSelect').value;
-      const container = document.getElementById('menuContainer');
-      container.innerHTML = '<div class="loading-spinner">Loading menu data...</div>';
+<style>
+  /* Extra styling for tracker bar and drawer */
+  .tracker-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #111111;
+    color: white;
+    padding: 0.8rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+  }
 
-      try {
-        const response = await fetch(`index.php?api_action=menu&loc=${location}`);
-        const data = await response.json();
+  .tracker-summary {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.95rem;
+  }
 
-        if (data.error) {
-          container.innerHTML = `<p style="text-align: center; color: red;">${data.message}</p>`;
-          return;
-        }
+  .btn-toggle-log {
+    background: var(--iu-crimson);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+  }
 
-        currentRawData = data;
-        populateStationDropdown(data);
-        renderMenu(data);
-      } catch (err) {
-        container.innerHTML = '<p style="text-align: center; color: red;">Failed to load menu data. Ensure synchronization script has run.</p>';
-      }
-    }
+  .add-btn {
+    margin-top: 0.75rem;
+    background: var(--iu-crimson);
+    color: white;
+    border: none;
+    padding: 0.4rem;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s;
+  }
 
-    // Extract station categories from Nutrislice JSON and populate dropdown
-    function populateStationDropdown(menuData) {
-      const stationFilter = document.getElementById('stationFilter');
-      stationFilter.innerHTML = '<option value="all">All Stations</option>';
+  .add-btn:hover {
+    background: #7a0000;
+  }
 
-      const items = menuData.days[0]?.menu_items || [];
-      const stations = new Set();
+  .log-drawer {
+    position: fixed;
+    bottom: 60px;
+    right: 20px;
+    width: 320px;
+    max-height: 400px;
+    background: white;
+    border: 1fr solid var(--border-color);
+    border-radius: 8px 8px 0 0;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+    padding: 1rem;
+    overflow-y: auto;
+    z-index: 999;
+  }
 
-      items.forEach(item => {
-        const station = item.station || item.category || 'General';
-        if (station) stations.add(station);
-      });
+  .log-drawer.hidden {
+    display: none;
+  }
 
-      stations.forEach(station => {
-        const opt = document.createElement('option');
-        opt.value = station;
-        opt.textContent = station;
-        stationFilter.appendChild(opt);
-      });
-    }
+  .log-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+  }
 
-    // Safely extract macronutrient info from item structure
-    function getNutritionalInfo(item) {
-      const foodObj = item.food || item.item || {};
-      const info = foodObj.rounded_nutrition_info || item.rounded_nutrition_info || {};
+  .remove-btn {
+    background: transparent;
+    color: #d9534f;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+  }
+</style>
 
-      return {
-        calories: info.calories ?? item.calories ?? 'N/A',
-        protein: info.protein ? `${info.protein}g` : '--',
-        carbs: info.carbohydrates ? `${info.carbohydrates}g` : '--',
-        fat: info.total_fat ? `${info.total_fat}g` : '--'
-      };
-    }
+<script>
+  let currentRawData = null;
+  let mealLog = [];
 
-    // Render grouped station cards
-    function renderMenu(menuData) {
-      const container = document.getElementById('menuContainer');
-      container.innerHTML = '';
+  // Fetch JSON menu data for selected location
+  async function loadMenu() {
+    const location = document.getElementById('locationSelect').value;
+    const container = document.getElementById('menuContainer');
+    container.innerHTML = '<div class="loading-spinner">Loading menu data...</div>';
 
-      const items = menuData.days[0]?.menu_items || [];
-      if (items.length === 0) {
-        container.innerHTML = '<p style="text-align: center;">No menu items listed for this hall today.</p>';
+    try {
+      const response = await fetch(`index.php?api_action=menu&loc=${location}`);
+      const data = await response.json();
+
+      if (data.error) {
+        container.innerHTML = `<p style="text-align: center; color: red;">${data.message}</p>`;
         return;
       }
 
-      // Group items by station name
-      const grouped = {};
-      items.forEach(item => {
-        const station = item.station || item.category || 'General';
-        if (!grouped[station]) grouped[station] = [];
-        grouped[station].push(item);
-      });
+      currentRawData = data;
+      populateStationDropdown(data);
+      renderMenu(data);
+    } catch (err) {
+      container.innerHTML = '<p style="text-align: center; color: red;">Failed to load menu data.</p>';
+    }
+  }
 
-      // Generate HTML for each station group
-      for (const [stationName, stationItems] of Object.entries(grouped)) {
-        const stationSection = document.createElement('div');
-        stationSection.className = 'station-group';
-        stationSection.setAttribute('data-station', stationName);
+  function populateStationDropdown(menuData) {
+    const stationFilter = document.getElementById('stationFilter');
+    stationFilter.innerHTML = '<option value="all">All Stations</option>';
 
-        let itemsHTML = stationItems.map(item => {
-          const name = item.text || (item.food && item.food.name) || 'Unknown Item';
-          const macros = getNutritionalInfo(item);
-          const calDisplay = macros.calories !== 'N/A' ? `${macros.calories} kcal` : 'N/A';
+    const items = menuData.days[0]?.menu_items || [];
+    const stations = new Set();
 
-          return `
-            <div class="food-card" data-name="${name.toLowerCase()}">
-              <div>
-                <h4>${name}</h4>
-                <span class="calories-badge">${calDisplay}</span>
-              </div>
-              <div class="macro-grid">
-                <div class="macro-item">
-                  <span class="macro-label">Protein</span>
-                  <span class="macro-value">${macros.protein}</span>
-                </div>
-                <div class="macro-item">
-                  <span class="macro-label">Carbs</span>
-                  <span class="macro-value">${macros.carbs}</span>
-                </div>
-                <div class="macro-item">
-                  <span class="macro-label">Fat</span>
-                  <span class="macro-value">${macros.fat}</span>
-                </div>
-              </div>
+    items.forEach(item => {
+      const station = item.station || item.category || 'General';
+      if (station) stations.add(station);
+    });
+
+    stations.forEach(station => {
+      const opt = document.createElement('option');
+      opt.value = station;
+      opt.textContent = station;
+      stationFilter.appendChild(opt);
+    });
+  }
+
+  function getNutritionalInfo(item) {
+    const foodObj = item.food || item.item || {};
+    const info = foodObj.rounded_nutrition_info || item.rounded_nutrition_info || {};
+
+    return {
+      calories: parseInt(info.calories ?? item.calories ?? 0, 10),
+      protein: parseInt(info.protein ?? 0, 10),
+      carbs: parseInt(info.carbohydrates ?? 0, 10),
+      fat: parseInt(info.total_fat ?? 0, 10)
+    };
+  }
+
+  function renderMenu(menuData) {
+    const container = document.getElementById('menuContainer');
+    container.innerHTML = '';
+
+    const items = menuData.days[0]?.menu_items || [];
+    if (items.length === 0) {
+      container.innerHTML = '<p style="text-align: center;">No menu items listed for this hall today.</p>';
+      return;
+    }
+
+    const grouped = {};
+    items.forEach((item, idx) => {
+      const station = item.station || item.category || 'General';
+      if (!grouped[station]) grouped[station] = [];
+      item._uniqueId = idx; // assign internal ID
+      grouped[station].push(item);
+    });
+
+    for (const [stationName, stationItems] of Object.entries(grouped)) {
+      const stationSection = document.createElement('div');
+      stationSection.className = 'station-group';
+      stationSection.setAttribute('data-station', stationName);
+
+      let itemsHTML = stationItems.map(item => {
+        const name = item.text || (item.food && item.food.name) || 'Unknown Item';
+        const macros = getNutritionalInfo(item);
+
+        return `
+          <div class="food-card" data-name="${name.toLowerCase()}">
+            <div>
+              <h4>${name}</h4>
+              <span class="calories-badge">${macros.calories} kcal</span>
             </div>
-          `;
-        }).join('');
-
-        stationSection.innerHTML = `
-          <h3 class="station-title">${stationName}</h3>
-          <div class="food-grid">${itemsHTML}</div>
+            <div class="macro-grid">
+              <div class="macro-item"><span class="macro-label">Protein</span><span class="macro-value">${macros.protein}g</span></div>
+              <div class="macro-item"><span class="macro-label">Carbs</span><span class="macro-value">${macros.carbs}g</span></div>
+              <div class="macro-item"><span class="macro-label">Fat</span><span class="macro-value">${macros.fat}g</span></div>
+            </div>
+            <button class="add-btn" onclick="addToTracker('${encodeURIComponent(name)}', ${macros.calories}, ${macros.protein}, ${macros.carbs}, ${macros.fat})">+ Add to Meal</button>
+          </div>
         `;
+      }).join('');
 
-        container.appendChild(stationSection);
-      }
+      stationSection.innerHTML = `
+        <h3 class="station-title">${stationName}</h3>
+        <div class="food-grid">${itemsHTML}</div>
+      `;
+
+      container.appendChild(stationSection);
     }
+  }
 
-    // Apply Real-Time Search & Station Dropdown Filtering
-    function applyFilters() {
-      const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
-      const selectedStation = document.getElementById('stationFilter').value;
+  // Tracking System Logic
+  function addToTracker(nameEncoded, cals, protein, carbs, fat) {
+    const name = decodeURIComponent(nameEncoded);
+    mealLog.push({ name, cals, protein, carbs, fat });
+    updateTrackerUI();
+  }
 
-      const stationGroups = document.querySelectorAll('.station-group');
+  function removeFromTracker(index) {
+    mealLog.splice(index, 1);
+    updateTrackerUI();
+  }
 
-      stationGroups.forEach(group => {
-        const groupStation = group.getAttribute('data-station');
-        const matchesStation = (selectedStation === 'all' || groupStation === selectedStation);
+  function updateTrackerUI() {
+    let totals = { cals: 0, protein: 0, carbs: 0, fat: 0 };
 
-        let visibleCardsInGroup = 0;
-        const cards = group.querySelectorAll('.food-card');
+    const logContainer = document.getElementById('logItemsContainer');
+    logContainer.innerHTML = '';
 
-        cards.forEach(card => {
-          const foodName = card.getAttribute('data-name');
-          const matchesSearch = foodName.includes(searchQuery);
+    if (mealLog.length === 0) {
+      logContainer.innerHTML = '<p class="empty-msg">No items added yet.</p>';
+    } else {
+      mealLog.forEach((item, index) => {
+        totals.cals += item.cals;
+        totals.protein += item.protein;
+        totals.carbs += item.carbs;
+        totals.fat += item.fat;
 
-          if (matchesStation && matchesSearch) {
-            card.style.display = 'flex';
-            visibleCardsInGroup++;
-          } else {
-            card.style.display = 'none';
-          }
-        });
-
-        // Hide empty station headers when filtering
-        group.style.display = visibleCardsInGroup > 0 ? 'block' : 'none';
+        const div = document.createElement('div');
+        div.className = 'log-item';
+        div.innerHTML = `
+          <div>
+            <strong>${item.name}</strong><br>
+            <small>${item.cals} kcal | P:${item.protein}g C:${item.carbs}g F:${item.fat}g</small>
+          </div>
+          <button class="remove-btn" onclick="removeFromTracker(${index})">✕</button>
+        `;
+        logContainer.appendChild(div);
       });
     }
 
-    // Initial load on page startup
-    document.addEventListener('DOMContentLoaded', loadMenu);
-  </script>
+    document.getElementById('totalCals').innerText = totals.cals;
+    document.getElementById('totalProtein').innerText = totals.protein;
+    document.getElementById('totalCarbs').innerText = totals.carbs;
+    document.getElementById('totalFat').innerText = totals.fat;
+    document.getElementById('logCount').innerText = mealLog.length;
+  }
+
+  function toggleLogDrawer() {
+    document.getElementById('logDrawer').classList.toggle('hidden');
+  }
+
+  function applyFilters() {
+    const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+    const selectedStation = document.getElementById('stationFilter').value;
+    const stationGroups = document.querySelectorAll('.station-group');
+
+    stationGroups.forEach(group => {
+      const groupStation = group.getAttribute('data-station');
+      const matchesStation = (selectedStation === 'all' || groupStation === selectedStation);
+      let visibleCardsInGroup = 0;
+
+      group.querySelectorAll('.food-card').forEach(card => {
+        const foodName = card.getAttribute('data-name');
+        if (matchesStation && foodName.includes(searchQuery)) {
+          card.style.display = 'flex';
+          visibleCardsInGroup++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      group.style.display = visibleCardsInGroup > 0 ? 'block' : 'none';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', loadMenu);
+</script>
 </body>
 </html>
