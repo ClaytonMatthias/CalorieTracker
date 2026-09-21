@@ -34,7 +34,7 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IU Dining Hall Calorie Tracker</title>
+  <title>IU Dining Hall Calorie & Macro Tracker</title>
   <style>
     :root {
       --iu-crimson: #990000;
@@ -52,6 +52,7 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       color: var(--text-dark);
       margin: 0;
       padding: 0;
+      padding-bottom: 70px; /* Space for sticky bar */
     }
 
     header {
@@ -73,7 +74,6 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       padding: 0 1rem;
     }
 
-    /* Controls Bar Styling */
     .controls-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -117,7 +117,6 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       border-color: var(--iu-crimson);
     }
 
-    /* Layout & Station Cards */
     .station-group {
       margin-bottom: 2.5rem;
     }
@@ -148,7 +147,7 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
     }
 
     .food-card h4 {
-      margin: 0 0 0.5rem 0;
+      margin: 0 0 0.75rem 0;
       font-size: 1.05rem;
     }
 
@@ -156,11 +155,42 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       display: inline-block;
       background: var(--iu-cream);
       color: var(--text-dark);
-      font-weight: 600;
-      padding: 0.25rem 0.5rem;
+      font-weight: 700;
+      padding: 0.3rem 0.6rem;
       border-radius: 4px;
-      font-size: 0.85rem;
+      font-size: 0.9rem;
+      margin-bottom: 0.6rem;
       align-self: flex-start;
+    }
+
+    .macro-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px dashed var(--border-color);
+      font-size: 0.8rem;
+      text-align: center;
+    }
+
+    .macro-item {
+      background-color: var(--bg-color);
+      padding: 0.3rem 0.2rem;
+      border-radius: 4px;
+    }
+
+    .macro-label {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .macro-value {
+      font-weight: 600;
+      color: var(--text-dark);
     }
 
     .loading-spinner {
@@ -169,16 +199,100 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       color: var(--text-muted);
       font-size: 1.1rem;
     }
+
+    /* Tracker Bar & Drawer Styling */
+    .tracker-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #111111;
+      color: white;
+      padding: 0.8rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
+
+    .tracker-summary {
+      display: flex;
+      gap: 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    .btn-toggle-log {
+      background: var(--iu-crimson);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .add-btn {
+      margin-top: 0.75rem;
+      background: var(--iu-crimson);
+      color: white;
+      border: none;
+      padding: 0.4rem;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+    }
+
+    .add-btn:hover {
+      background: #7a0000;
+    }
+
+    .log-drawer {
+      position: fixed;
+      bottom: 60px;
+      right: 20px;
+      width: 320px;
+      max-height: 400px;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+      padding: 1rem;
+      overflow-y: auto;
+      z-index: 999;
+    }
+
+    .log-drawer.hidden {
+      display: none;
+    }
+
+    .log-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.9rem;
+    }
+
+    .remove-btn {
+      background: transparent;
+      color: #d9534f;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
 
   <header>
-    <h1>IU Dining Hall Calorie Tracker</h1>
+    <h1>IU Dining Hall Calorie & Macro Tracker</h1>
   </header>
 
   <div class="container">
-    <!-- Controls Layout -->
     <div class="controls-grid">
       <div class="control-group">
         <label for="locationSelect">Dining Hall</label>
@@ -210,304 +324,215 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
     </div>
 
     <!-- Main Dynamic Content Area -->
-<!-- Main Dynamic Content Area -->
-<div id="menuContainer">
-  <div class="loading-spinner">Loading menu data...</div>
-</div>
-
-<!-- Sticky Tracker Bar at the bottom of the viewport -->
-<div id="trackerBar" class="tracker-bar">
-  <div class="tracker-summary">
-    <div><strong>Calories:</strong> <span id="totalCals">0</span> kcal</div>
-    <div><strong>Protein:</strong> <span id="totalProtein">0</span>g</div>
-    <div><strong>Carbs:</strong> <span id="totalCarbs">0</span>g</div>
-    <div><strong>Fat:</strong> <span id="totalFat">0</span>g</div>
+    <div id="menuContainer">
+      <div class="loading-spinner">Loading menu data...</div>
+    </div>
   </div>
-  <button class="btn-toggle-log" onclick="toggleLogDrawer()">View Log (<span id="logCount">0</span>)</button>
-</div>
 
-<!-- Sliding Log Drawer -->
-<div id="logDrawer" class="log-drawer hidden">
-  <h3>My Meal Log</h3>
-  <div id="logItemsContainer" class="log-items-container">
-    <p class="empty-msg">No items added yet. Click "+ Add" on menu items above!</p>
+  <!-- Sticky Tracker Bar at bottom -->
+  <div id="trackerBar" class="tracker-bar">
+    <div class="tracker-summary">
+      <div><strong>Calories:</strong> <span id="totalCals">0</span> kcal</div>
+      <div><strong>Protein:</strong> <span id="totalProtein">0</span>g</div>
+      <div><strong>Carbs:</strong> <span id="totalCarbs">0</span>g</div>
+      <div><strong>Fat:</strong> <span id="totalFat">0</span>g</div>
+    </div>
+    <button class="btn-toggle-log" onclick="toggleLogDrawer()">View Log (<span id="logCount">0</span>)</button>
   </div>
-</div>
 
-<style>
-  /* Extra styling for tracker bar and drawer */
-  .tracker-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: #111111;
-    color: white;
-    padding: 0.8rem 1.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
-    z-index: 1000;
-  }
+  <!-- Sliding Log Drawer -->
+  <div id="logDrawer" class="log-drawer hidden">
+    <h3 style="margin-top:0;">My Meal Log</h3>
+    <div id="logItemsContainer">
+      <p class="empty-msg">No items added yet.</p>
+    </div>
+  </div>
 
-  .tracker-summary {
-    display: flex;
-    gap: 1.5rem;
-    font-size: 0.95rem;
-  }
+  <script>
+    let currentRawData = null;
+    let mealLog = [];
 
-  .btn-toggle-log {
-    background: var(--iu-crimson);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    font-weight: bold;
-    cursor: pointer;
-  }
+    async function loadMenu() {
+      const location = document.getElementById('locationSelect').value;
+      const container = document.getElementById('menuContainer');
+      container.innerHTML = '<div class="loading-spinner">Loading menu data...</div>';
 
-  .add-btn {
-    margin-top: 0.75rem;
-    background: var(--iu-crimson);
-    color: white;
-    border: none;
-    padding: 0.4rem;
-    border-radius: 4px;
-    font-weight: 600;
-    cursor: pointer;
-    width: 100%;
-    transition: background 0.2s;
-  }
+      try {
+        const response = await fetch(`index.php?api_action=menu&loc=${location}`);
+        const data = await response.json();
 
-  .add-btn:hover {
-    background: #7a0000;
-  }
+        if (data.error) {
+          container.innerHTML = `<p style="text-align: center; color: red;">${data.message}</p>`;
+          return;
+        }
 
-  .log-drawer {
-    position: fixed;
-    bottom: 60px;
-    right: 20px;
-    width: 320px;
-    max-height: 400px;
-    background: white;
-    border: 1fr solid var(--border-color);
-    border-radius: 8px 8px 0 0;
-    box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
-    padding: 1rem;
-    overflow-y: auto;
-    z-index: 999;
-  }
+        currentRawData = data;
+        populateStationDropdown(data);
+        renderMenu(data);
+      } catch (err) {
+        container.innerHTML = '<p style="text-align: center; color: red;">Failed to load menu data.</p>';
+      }
+    }
 
-  .log-drawer.hidden {
-    display: none;
-  }
+    function populateStationDropdown(menuData) {
+      const stationFilter = document.getElementById('stationFilter');
+      stationFilter.innerHTML = '<option value="all">All Stations</option>';
 
-  .log-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border-color);
-    font-size: 0.9rem;
-  }
+      const items = menuData.days[0]?.menu_items || [];
+      const stations = new Set();
 
-  .remove-btn {
-    background: transparent;
-    color: #d9534f;
-    border: none;
-    font-weight: bold;
-    cursor: pointer;
-  }
-</style>
+      items.forEach(item => {
+        const station = item.station || item.category || 'General';
+        if (station) stations.add(station);
+      });
 
-<script>
-  let currentRawData = null;
-  let mealLog = [];
+      stations.forEach(station => {
+        const opt = document.createElement('option');
+        opt.value = station;
+        opt.textContent = station;
+        stationFilter.appendChild(opt);
+      });
+    }
 
-  // Fetch JSON menu data for selected location
-  async function loadMenu() {
-    const location = document.getElementById('locationSelect').value;
-    const container = document.getElementById('menuContainer');
-    container.innerHTML = '<div class="loading-spinner">Loading menu data...</div>';
+    function getNutritionalInfo(item) {
+      const foodObj = item.food || item.item || {};
+      const info = foodObj.rounded_nutrition_info || item.rounded_nutrition_info || {};
 
-    try {
-      const response = await fetch(`index.php?api_action=menu&loc=${location}`);
-      const data = await response.json();
+      return {
+        calories: parseInt(info.calories ?? item.calories ?? 0, 10),
+        protein: parseInt(info.protein ?? 0, 10),
+        carbs: parseInt(info.carbohydrates ?? 0, 10),
+        fat: parseInt(info.total_fat ?? 0, 10)
+      };
+    }
 
-      if (data.error) {
-        container.innerHTML = `<p style="text-align: center; color: red;">${data.message}</p>`;
+    function renderMenu(menuData) {
+      const container = document.getElementById('menuContainer');
+      container.innerHTML = '';
+
+      const items = menuData.days[0]?.menu_items || [];
+      if (items.length === 0) {
+        container.innerHTML = '<p style="text-align: center;">No menu items listed for this hall today.</p>';
         return;
       }
 
-      currentRawData = data;
-      populateStationDropdown(data);
-      renderMenu(data);
-    } catch (err) {
-      container.innerHTML = '<p style="text-align: center; color: red;">Failed to load menu data.</p>';
-    }
-  }
+      const grouped = {};
+      items.forEach((item, idx) => {
+        const station = item.station || item.category || 'General';
+        if (!grouped[station]) grouped[station] = [];
+        item._uniqueId = idx;
+        grouped[station].push(item);
+      });
 
-  function populateStationDropdown(menuData) {
-    const stationFilter = document.getElementById('stationFilter');
-    stationFilter.innerHTML = '<option value="all">All Stations</option>';
+      for (const [stationName, stationItems] of Object.entries(grouped)) {
+        const stationSection = document.createElement('div');
+        stationSection.className = 'station-group';
+        stationSection.setAttribute('data-station', stationName);
 
-    const items = menuData.days[0]?.menu_items || [];
-    const stations = new Set();
+        let itemsHTML = stationItems.map(item => {
+          const name = item.text || (item.food && item.food.name) || 'Unknown Item';
+          const macros = getNutritionalInfo(item);
 
-    items.forEach(item => {
-      const station = item.station || item.category || 'General';
-      if (station) stations.add(station);
-    });
+          return `
+            <div class="food-card" data-name="${name.toLowerCase()}">
+              <div>
+                <h4>${name}</h4>
+                <span class="calories-badge">${macros.calories} kcal</span>
+              </div>
+              <div class="macro-grid">
+                <div class="macro-item"><span class="macro-label">Protein</span><span class="macro-value">${macros.protein}g</span></div>
+                <div class="macro-item"><span class="macro-label">Carbs</span><span class="macro-value">${macros.carbs}g</span></div>
+                <div class="macro-item"><span class="macro-label">Fat</span><span class="macro-value">${macros.fat}g</span></div>
+              </div>
+              <button class="add-btn" onclick="addToTracker('${encodeURIComponent(name)}', ${macros.calories}, ${macros.protein}, ${macros.carbs}, ${macros.fat})">+ Add to Meal</button>
+            </div>
+          `;
+        }).join('');
 
-    stations.forEach(station => {
-      const opt = document.createElement('option');
-      opt.value = station;
-      opt.textContent = station;
-      stationFilter.appendChild(opt);
-    });
-  }
+        stationSection.innerHTML = `
+          <h3 class="station-title">${stationName}</h3>
+          <div class="food-grid">${itemsHTML}</div>
+        `;
 
-  function getNutritionalInfo(item) {
-    const foodObj = item.food || item.item || {};
-    const info = foodObj.rounded_nutrition_info || item.rounded_nutrition_info || {};
-
-    return {
-      calories: parseInt(info.calories ?? item.calories ?? 0, 10),
-      protein: parseInt(info.protein ?? 0, 10),
-      carbs: parseInt(info.carbohydrates ?? 0, 10),
-      fat: parseInt(info.total_fat ?? 0, 10)
-    };
-  }
-
-  function renderMenu(menuData) {
-    const container = document.getElementById('menuContainer');
-    container.innerHTML = '';
-
-    const items = menuData.days[0]?.menu_items || [];
-    if (items.length === 0) {
-      container.innerHTML = '<p style="text-align: center;">No menu items listed for this hall today.</p>';
-      return;
+        container.appendChild(stationSection);
+      }
     }
 
-    const grouped = {};
-    items.forEach((item, idx) => {
-      const station = item.station || item.category || 'General';
-      if (!grouped[station]) grouped[station] = [];
-      item._uniqueId = idx; // assign internal ID
-      grouped[station].push(item);
-    });
+    function addToTracker(nameEncoded, cals, protein, carbs, fat) {
+      const name = decodeURIComponent(nameEncoded);
+      mealLog.push({ name, cals, protein, carbs, fat });
+      updateTrackerUI();
+    }
 
-    for (const [stationName, stationItems] of Object.entries(grouped)) {
-      const stationSection = document.createElement('div');
-      stationSection.className = 'station-group';
-      stationSection.setAttribute('data-station', stationName);
+    function removeFromTracker(index) {
+      mealLog.splice(index, 1);
+      updateTrackerUI();
+    }
 
-      let itemsHTML = stationItems.map(item => {
-        const name = item.text || (item.food && item.food.name) || 'Unknown Item';
-        const macros = getNutritionalInfo(item);
+    function updateTrackerUI() {
+      let totals = { cals: 0, protein: 0, carbs: 0, fat: 0 };
 
-        return `
-          <div class="food-card" data-name="${name.toLowerCase()}">
+      const logContainer = document.getElementById('logItemsContainer');
+      logContainer.innerHTML = '';
+
+      if (mealLog.length === 0) {
+        logContainer.innerHTML = '<p class="empty-msg">No items added yet.</p>';
+      } else {
+        mealLog.forEach((item, index) => {
+          totals.cals += item.cals;
+          totals.protein += item.protein;
+          totals.carbs += item.carbs;
+          totals.fat += item.fat;
+
+          const div = document.createElement('div');
+          div.className = 'log-item';
+          div.innerHTML = `
             <div>
-              <h4>${name}</h4>
-              <span class="calories-badge">${macros.calories} kcal</span>
+              <strong>${item.name}</strong><br>
+              <small>${item.cals} kcal | P:${item.protein}g C:${item.carbs}g F:${item.fat}g</small>
             </div>
-            <div class="macro-grid">
-              <div class="macro-item"><span class="macro-label">Protein</span><span class="macro-value">${macros.protein}g</span></div>
-              <div class="macro-item"><span class="macro-label">Carbs</span><span class="macro-value">${macros.carbs}g</span></div>
-              <div class="macro-item"><span class="macro-label">Fat</span><span class="macro-value">${macros.fat}g</span></div>
-            </div>
-            <button class="add-btn" onclick="addToTracker('${encodeURIComponent(name)}', ${macros.calories}, ${macros.protein}, ${macros.carbs}, ${macros.fat})">+ Add to Meal</button>
-          </div>
-        `;
-      }).join('');
+            <button class="remove-btn" onclick="removeFromTracker(${index})">✕</button>
+          `;
+          logContainer.appendChild(div);
+        });
+      }
 
-      stationSection.innerHTML = `
-        <h3 class="station-title">${stationName}</h3>
-        <div class="food-grid">${itemsHTML}</div>
-      `;
-
-      container.appendChild(stationSection);
+      document.getElementById('totalCals').innerText = totals.cals;
+      document.getElementById('totalProtein').innerText = totals.protein;
+      document.getElementById('totalCarbs').innerText = totals.carbs;
+      document.getElementById('totalFat').innerText = totals.fat;
+      document.getElementById('logCount').innerText = mealLog.length;
     }
-  }
 
-  // Tracking System Logic
-  function addToTracker(nameEncoded, cals, protein, carbs, fat) {
-    const name = decodeURIComponent(nameEncoded);
-    mealLog.push({ name, cals, protein, carbs, fat });
-    updateTrackerUI();
-  }
+    function toggleLogDrawer() {
+      document.getElementById('logDrawer').classList.toggle('hidden');
+    }
 
-  function removeFromTracker(index) {
-    mealLog.splice(index, 1);
-    updateTrackerUI();
-  }
+    function applyFilters() {
+      const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+      const selectedStation = document.getElementById('stationFilter').value;
+      const stationGroups = document.querySelectorAll('.station-group');
 
-  function updateTrackerUI() {
-    let totals = { cals: 0, protein: 0, carbs: 0, fat: 0 };
+      stationGroups.forEach(group => {
+        const groupStation = group.getAttribute('data-station');
+        const matchesStation = (selectedStation === 'all' || groupStation === selectedStation);
+        let visibleCardsInGroup = 0;
 
-    const logContainer = document.getElementById('logItemsContainer');
-    logContainer.innerHTML = '';
+        group.querySelectorAll('.food-card').forEach(card => {
+          const foodName = card.getAttribute('data-name');
+          if (matchesStation && foodName.includes(searchQuery)) {
+            card.style.display = 'flex';
+            visibleCardsInGroup++;
+          } else {
+            card.style.display = 'none';
+          }
+        });
 
-    if (mealLog.length === 0) {
-      logContainer.innerHTML = '<p class="empty-msg">No items added yet.</p>';
-    } else {
-      mealLog.forEach((item, index) => {
-        totals.cals += item.cals;
-        totals.protein += item.protein;
-        totals.carbs += item.carbs;
-        totals.fat += item.fat;
-
-        const div = document.createElement('div');
-        div.className = 'log-item';
-        div.innerHTML = `
-          <div>
-            <strong>${item.name}</strong><br>
-            <small>${item.cals} kcal | P:${item.protein}g C:${item.carbs}g F:${item.fat}g</small>
-          </div>
-          <button class="remove-btn" onclick="removeFromTracker(${index})">✕</button>
-        `;
-        logContainer.appendChild(div);
+        group.style.display = visibleCardsInGroup > 0 ? 'block' : 'none';
       });
     }
 
-    document.getElementById('totalCals').innerText = totals.cals;
-    document.getElementById('totalProtein').innerText = totals.protein;
-    document.getElementById('totalCarbs').innerText = totals.carbs;
-    document.getElementById('totalFat').innerText = totals.fat;
-    document.getElementById('logCount').innerText = mealLog.length;
-  }
-
-  function toggleLogDrawer() {
-    document.getElementById('logDrawer').classList.toggle('hidden');
-  }
-
-  function applyFilters() {
-    const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
-    const selectedStation = document.getElementById('stationFilter').value;
-    const stationGroups = document.querySelectorAll('.station-group');
-
-    stationGroups.forEach(group => {
-      const groupStation = group.getAttribute('data-station');
-      const matchesStation = (selectedStation === 'all' || groupStation === selectedStation);
-      let visibleCardsInGroup = 0;
-
-      group.querySelectorAll('.food-card').forEach(card => {
-        const foodName = card.getAttribute('data-name');
-        if (matchesStation && foodName.includes(searchQuery)) {
-          card.style.display = 'flex';
-          visibleCardsInGroup++;
-        } else {
-          card.style.display = 'none';
-        }
-      });
-
-      group.style.display = visibleCardsInGroup > 0 ? 'block' : 'none';
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', loadMenu);
-</script>
+    document.addEventListener('DOMContentLoaded', loadMenu);
+  </script>
 </body>
 </html>
