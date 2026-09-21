@@ -147,8 +147,15 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
     }
 
     .food-card h4 {
-      margin: 0 0 0.75rem 0;
+      margin: 0 0 0.5rem 0;
       font-size: 1.05rem;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.6rem;
     }
 
     .calories-badge {
@@ -156,11 +163,19 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       background: var(--iu-cream);
       color: var(--text-dark);
       font-weight: 700;
-      padding: 0.3rem 0.6rem;
+      padding: 0.25rem 0.5rem;
       border-radius: 4px;
-      font-size: 0.9rem;
-      margin-bottom: 0.6rem;
-      align-self: flex-start;
+      font-size: 0.85rem;
+    }
+
+    .serving-badge {
+      display: inline-block;
+      background: #e9ecef;
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
     }
 
     .macro-grid {
@@ -430,15 +445,32 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       });
     }
 
+    function getItemName(item) {
+      return (item.name || item.text || (item.food && item.food.name) || 'Unknown Item').trim();
+    }
+
     function getNutritionalInfo(item) {
+      // Priority 1: Parsed `macros` key from new sync_menu.py
+      if (item.macros) {
+        return {
+          calories: parseInt(item.macros.calories ?? 0, 10),
+          protein: parseInt(item.macros.protein_g ?? 0, 10),
+          carbs: parseInt(item.macros.carbs_g ?? 0, 10),
+          fat: parseInt(item.macros.fat_g ?? 0, 10),
+          servingSize: item.serving_size || 'N/A'
+        };
+      }
+
+      // Priority 2: Fallback to raw Nutrislice schema structures
       const foodObj = item.food || item.item || {};
       const info = foodObj.rounded_nutrition_info || item.rounded_nutrition_info || {};
 
       return {
         calories: parseInt(info.calories ?? item.calories ?? 0, 10),
         protein: parseInt(info.protein ?? 0, 10),
-        carbs: parseInt(info.carbohydrates ?? 0, 10),
-        fat: parseInt(info.total_fat ?? 0, 10)
+        carbs: parseInt(info.carbohydrates ?? info.g_carb ?? 0, 10),
+        fat: parseInt(info.total_fat ?? info.g_fat ?? 0, 10),
+        servingSize: item.serving_size || foodObj.serving_size || 'N/A'
       };
     }
 
@@ -452,22 +484,21 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
         return;
       }
 
-      // Group items by station while removing duplicates and zero-calorie items
       const grouped = {};
       
       items.forEach((item) => {
-        const name = (item.text || (item.food && item.food.name) || 'Unknown Item').trim();
-        const macros = getNutritionalInfo(item);
+        const name = getItemName(item);
+        const details = getNutritionalInfo(item);
 
-        // 1. FILTER: Omit zero-calorie items
-        if (macros.calories <= 0) return;
+        // Filter out items without calorie data
+        if (isNaN(details.calories) || details.calories <= 0) return;
 
         const station = item.station || item.category || 'General';
         if (!grouped[station]) grouped[station] = [];
 
-        // 2. DEDUPLICATE: Check if item with this name already exists in station
+        // Deduplicate within the same station
         const alreadyExists = grouped[station].some(
-          existing => (existing.text || existing.food?.name || '').trim().toLowerCase() === name.toLowerCase()
+          existing => getItemName(existing).toLowerCase() === name.toLowerCase()
         );
 
         if (!alreadyExists) {
@@ -486,21 +517,24 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
         stationSection.setAttribute('data-station', stationName);
 
         let itemsHTML = stationItems.map(item => {
-          const name = item.text || (item.food && item.food.name) || 'Unknown Item';
-          const macros = getNutritionalInfo(item);
+          const name = getItemName(item);
+          const details = getNutritionalInfo(item);
 
           return `
             <div class="food-card" data-name="${name.toLowerCase()}">
               <div>
                 <h4>${name}</h4>
-                <span class="calories-badge">${macros.calories} kcal</span>
+                <div class="badge-row">
+                  <span class="calories-badge">${details.calories} kcal</span>
+                  <span class="serving-badge">Serving: ${details.servingSize}</span>
+                </div>
               </div>
               <div class="macro-grid">
-                <div class="macro-item"><span class="macro-label">Protein</span><span class="macro-value">${macros.protein}g</span></div>
-                <div class="macro-item"><span class="macro-label">Carbs</span><span class="macro-value">${macros.carbs}g</span></div>
-                <div class="macro-item"><span class="macro-label">Fat</span><span class="macro-value">${macros.fat}g</span></div>
+                <div class="macro-item"><span class="macro-label">Protein</span><span class="macro-value">${details.protein}g</span></div>
+                <div class="macro-item"><span class="macro-label">Carbs</span><span class="macro-value">${details.carbs}g</span></div>
+                <div class="macro-item"><span class="macro-label">Fat</span><span class="macro-value">${details.fat}g</span></div>
               </div>
-              <button class="add-btn" onclick="addToTracker('${encodeURIComponent(name)}', ${macros.calories}, ${macros.protein}, ${macros.carbs}, ${macros.fat})">+ Add to Meal</button>
+              <button class="add-btn" onclick="addToTracker('${encodeURIComponent(name)}', ${details.calories}, ${details.protein}, ${details.carbs}, ${details.fat})">+ Add to Meal</button>
             </div>
           `;
         }).join('');
