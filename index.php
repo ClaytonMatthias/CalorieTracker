@@ -1,15 +1,13 @@
 <?php
-// Handle JSON request from JS based on chosen location
 if (isset($_GET['api_action']) && $_GET['api_action'] === 'menu') {
     header('Content-Type: application/json; charset=utf-8');
 
-    // Map location slugs to synced JSON filenames
     $locationMap = [
-        'wright-quad-dining-hall' => 'wright.json',
-        'mcnutt-dining-hall'      => 'mcnutt.json',
-        'forest-dining-hall'      => 'forest.json',
-        'collins-eatery'          => 'collins.json',
-        'goodbody-hall-eatery'    => 'goodbody.json'
+        'wright-eatery'        => 'wright.json',
+        'mcnutt-dining-hall'   => 'mcnutt.json',
+        'forest-dining-hall'   => 'forest.json',
+        'collins-eatery'       => 'collins.json',
+        'goodbody-hall-eatery' => 'goodbody.json'
     ];
 
     $loc = $_GET['loc'] ?? 'mcnutt-dining-hall';
@@ -158,11 +156,11 @@ if (isset($_GET['api_action']) && $_GET['api_action'] === 'menu') {
       <h2>Find Food</h2>
       <div class="controls">
         <select id="locationSelect">
-           <option value="wright-quad-dining-hall">Wright Quad Dining Hall</option>
-           <option value="mcnutt-dining-hall">McNutt Dining Hall</option>
-           <option value="forest-dining-hall">Forest Dining Hall</option>
-           <option value="collins-eatery">Collins Eatery</option>
-           <option value="goodbody-hall-eatery">Goodbody Hall Eatery</option>
+          <option value="wright-eatery">Wright Dining Hall</option>
+          <option value="mcnutt-dining-hall">McNutt Dining Hall</option>
+          <option value="forest-dining-hall">Forest Dining Hall</option>
+          <option value="collins-eatery">Collins Eatery</option>
+          <option value="goodbody-hall-eatery">Goodbody Hall Eatery</option>
         </select>
         <select id="mealSelect">
           <option value="lunch">Lunch</option>
