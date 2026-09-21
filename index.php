@@ -1,319 +1,350 @@
 <?php
-if (isset($_GET['api_action']) && $_GET['api_action'] === 'menu') {
+// ============================================================================
+// PHP BACKEND: API ENDPOINT FOR MENU JSON
+// ============================================================================
+if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
     header('Content-Type: application/json; charset=utf-8');
 
+    // Map frontend slugs to local JSON filenames created by sync_menu.py
     $locationMap = [
-        'wright-eatery'        => 'wright.json',
         'mcnutt-dining-hall'   => 'mcnutt.json',
         'forest-dining-hall'   => 'forest.json',
+        'wright-eatery'        => 'wright.json',
         'collins-eatery'       => 'collins.json',
         'goodbody-hall-eatery' => 'goodbody.json'
     ];
 
-    $loc = $_GET['loc'] ?? 'mcnutt-dining-hall';
-    $fileName = $locationMap[$loc] ?? 'sample_menu.json';
-    $jsonFile = __DIR__ . '/' . $fileName;
+    $loc = $_GET['loc'] ?? 'mcnutt-dining-hall';$fileName = $locationMap[$loc] ?? 'mcnutt.json';
+    $jsonFile = __DIR__ . '/' .$fileName;
 
     if (file_exists($jsonFile)) {
         echo file_get_contents($jsonFile);
     } else {
         echo json_encode([
             'error' => true,
-            'message' => "Menu file ($fileName) not found on Silo yet."
+            'message' => "Menu file ($fileName) not found on server yet."
         ]);
     }
     exit;
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IU Dining Calorie Tracker</title>
+  <title>IU Dining Hall Calorie Tracker</title>
   <style>
     :root {
       --iu-crimson: #990000;
-      --bg-dark: #121212;
-      --card-bg: #1e1e1e;
-      --text: #ffffff;
-      --subtext: #a0a0a0;
+      --iu-cream: #EEEDEB;
+      --bg-color: #f8f9fa;
+      --card-bg: #ffffff;
+      --text-dark: #212529;
+      --text-muted: #6c757d;
+      --border-color: #dee2e6;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: var(--bg-dark);
-      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-dark);
       margin: 0;
-      padding: 20px;
+      padding: 0;
+    }
+
+    header {
+      background-color: var(--iu-crimson);
+      color: white;
+      padding: 1.5rem 1rem;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.8rem;
     }
 
     .container {
       max-width: 1000px;
-      margin: 0 auto;
+      margin: 1.5rem auto;
+      padding: 0 1rem;
+    }
+
+    /* Controls Bar Styling */
+    .controls-grid {
       display: grid;
-      grid-template-columns: 1fr 320px;
-      gap: 20px;
-    }
-
-    @media (max-width: 768px) {
-      .container { grid-template-columns: 1fr; }
-    }
-
-    header {
-      grid-column: 1 / -1;
-      background: var(--iu-crimson);
-      padding: 15px 20px;
-      border-radius: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    header h1 { margin: 0; font-size: 1.5rem; }
-
-    .card {
+      grid-template-columns: 1fr;
+      gap: 1rem;
       background: var(--card-bg);
+      padding: 1.25rem;
       border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      margin-bottom: 2rem;
     }
 
-    .controls {
+    @media (min-width: 768px) {
+      .controls-grid {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .control-group label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    select, input[type="text"] {
+      padding: 0.6rem 0.8rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: var(--iu-crimson);
+    }
+
+    /* Layout & Station Cards */
+    .station-group {
+      margin-bottom: 2.5rem;
+    }
+
+    .station-title {
+      font-size: 1.3rem;
+      color: var(--iu-crimson);
+      border-bottom: 2px solid var(--iu-crimson);
+      padding-bottom: 0.4rem;
+      margin-bottom: 1rem;
+    }
+
+    .food-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 10px;
-      margin-bottom: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
     }
 
-    select, input, button {
-      background: #2d2d2d;
-      color: var(--text);
-      border: 1px solid #444;
-      padding: 10px;
+    .food-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
       border-radius: 6px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    button {
-      background: var(--iu-crimson);
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      border: none;
-    }
-
-    .menu-item {
+      padding: 1rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
       display: flex;
+      flex-direction: column;
       justify-content: space-between;
-      align-items: center;
-      padding: 12px;
-      border-bottom: 1px solid #333;
     }
 
-    .item-meta { font-size: 0.85rem; color: var(--subtext); }
+    .food-card h4 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.05rem;
+    }
 
-    .stat-box {
-      background: #2a2a2a;
-      padding: 15px;
-      border-radius: 6px;
+    .calories-badge {
+      display: inline-block;
+      background: var(--iu-cream);
+      color: var(--text-dark);
+      font-weight: 600;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      align-self: flex-start;
+    }
+
+    .loading-spinner {
       text-align: center;
-      margin-bottom: 15px;
-    }
-
-    .stat-number { font-size: 2rem; font-weight: bold; color: #4caf50; }
-
-    .logged-item {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.9rem;
-      margin-bottom: 8px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #333;
-    }
-
-    .btn-remove {
-      background: none;
-      border: none;
-      color: #ff5252;
-      cursor: pointer;
-      padding: 0 5px;
-      width: auto;
+      padding: 3rem;
+      color: var(--text-muted);
+      font-size: 1.1rem;
     }
   </style>
 </head>
 <body>
 
-<div class="container">
   <header>
-    <h1>IU Dining Calorie Tracker</h1>
-    <small>Hosted on Luddy Silo</small>
+    <h1>IU Dining Hall Calorie Tracker</h1>
   </header>
 
-  <main>
-    <div class="card">
-      <h2>Find Food</h2>
-      <div class="controls">
-        <select id="locationSelect">
-          <option value="wright-eatery">Wright Dining Hall</option>
+  <div class="container">
+    <!-- Controls Layout -->
+    <div class="controls-grid">
+      <div class="control-group">
+        <label for="locationSelect">Dining Hall</label>
+        <select id="locationSelect" onchange="loadMenu()">
           <option value="mcnutt-dining-hall">McNutt Dining Hall</option>
           <option value="forest-dining-hall">Forest Dining Hall</option>
+          <option value="wright-eatery">Wright Eatery</option>
           <option value="collins-eatery">Collins Eatery</option>
           <option value="goodbody-hall-eatery">Goodbody Hall Eatery</option>
         </select>
-        <select id="mealSelect">
-          <option value="lunch">Lunch</option>
-          <option value="breakfast">Breakfast</option>
-          <option value="dinner">Dinner</option>
+      </div>
+
+      <div class="control-group">
+        <label for="stationFilter">Station Filter</label>
+        <select id="stationFilter" onchange="applyFilters()">
+          <option value="all">All Stations</option>
         </select>
-        <input type="date" id="dateSelect">
-        <button id="fetchBtn" onclick="fetchMenu()">Get Menu</button>
       </div>
 
-      <div id="menuContainer">
-        <p style="color: var(--subtext);">Select options above and click "Get Menu" to display items.</p>
+      <div class="control-group">
+        <label for="searchInput">Search Food</label>
+        <input 
+          type="text" 
+          id="searchInput" 
+          placeholder="e.g. Chicken, Pizza, Salad..." 
+          onkeyup="applyFilters()"
+        />
       </div>
     </div>
-  </main>
 
-  <aside class="tracker-summary">
-    <div class="card">
-      <h2>Daily Log</h2>
-      <div class="stat-box">
-        <div>Total Calories</div>
-        <div class="stat-number" id="totalCals">0</div>
-      </div>
-      
-      <h3>Logged Items</h3>
-      <div id="loggedItems">
-        <p style="color: var(--subtext); font-size: 0.9rem;">No items added yet.</p>
-      </div>
-      <button onclick="clearLog()" style="margin-top: 15px; background: #444;">Clear Today's Log</button>
+    <!-- Main Dynamic Content Area -->
+    <div id="menuContainer">
+      <div class="loading-spinner">Loading menu data...</div>
     </div>
-  </aside>
-</div>
+  </div>
 
-<script>
-  let loggedFood = JSON.parse(localStorage.getItem('iu_cals_log')) || [];
+  <script>
+    let currentRawData = null;
 
-  document.getElementById('dateSelect').valueAsDate = new Date();
+    // Fetch JSON menu data for the selected location
+    async function loadMenu() {
+      const location = document.getElementById('locationSelect').value;
+      const container = document.getElementById('menuContainer');
+      container.innerHTML = '<div class="loading-spinner">Loading menu data...</div>';
 
-async function fetchMenu() {
-    const loc = document.getElementById('locationSelect').value;
-    const container = document.getElementById('menuContainer');
-    container.innerHTML = '<p>Loading synced menu & nutrition data...</p>';
+      try {
+        const response = await fetch(`index.php?api_action=menu&loc=${location}`);
+        const data = await response.json();
 
-    try {
-      // Pass the selected location slug to PHP
-      const res = await fetch(`index.php?api_action=menu&loc=${loc}`);
-      const data = await res.json();
+        if (data.error) {
+          container.innerHTML = `<p style="text-align: center; color: red;">${data.message}</p>`;
+          return;
+        }
 
-      if (data.error) {
-        throw new Error(data.message);
+        currentRawData = data;
+        populateStationDropdown(data);
+        renderMenu(data);
+      } catch (err) {
+        container.innerHTML = '<p style="text-align: center; color: red;">Failed to load menu data. Ensure synchronization script has run.</p>';
+      }
+    }
+
+    // Extract station categories from Nutrislice JSON and populate dropdown
+    function populateStationDropdown(menuData) {
+      const stationFilter = document.getElementById('stationFilter');
+      stationFilter.innerHTML = '<option value="all">All Stations</option>';
+
+      const items = menuData.days[0]?.menu_items || [];
+      const stations = new Set();
+
+      items.forEach(item => {
+        // Use text header or station label from Nutrislice item schema
+        const station = item.station || item.category || 'General';
+        if (station) stations.add(station);
+      });
+
+      stations.forEach(station => {
+        const opt = document.createElement('option');
+        opt.value = station;
+        opt.textContent = station;
+        stationFilter.appendChild(opt);
+      });
+    }
+
+    // Render grouped station cards
+    function renderMenu(menuData) {
+      const container = document.getElementById('menuContainer');
+      container.innerHTML = '';
+
+      const items = menuData.days[0]?.menu_items || [];
+      if (items.length === 0) {
+        container.innerHTML = '<p style="text-align: center;">No menu items listed for this hall today.</p>';
+        return;
       }
 
-      renderMenu(data);
-    } catch (err) {
-      console.error("Error reading menu JSON:", err);
-      container.innerHTML = `<p style="color:#ff5252;">⚠️ Unable to load menu data (${err.message}).</p>`;
-    }
-  }
-
-  function renderMenu(data) {
-    const container = document.getElementById('menuContainer');
-    container.innerHTML = '';
-
-    let itemsFound = false;
-
-    // Traverse Nutrislice days -> menu_items -> food
-    if (data && data.days && Array.isArray(data.days)) {
-      data.days.forEach(day => {
-        if (day.menu_items && Array.isArray(day.menu_items)) {
-          day.menu_items.forEach(item => {
-            if (!item.food || !item.food.name) return;
-
-            itemsFound = true;
-            const food = item.food;
-            
-            // Extract nutrition info safely
-            const cals = food.rounded_nutrition_info?.calories ?? food.nutrition_info?.calories ?? 0;
-            const protein = food.rounded_nutrition_info?.g_protein ?? food.nutrition_info?.g_protein ?? 'N/A';
-            const carbs = food.rounded_nutrition_info?.g_carbs ?? food.nutrition_info?.g_carbs ?? 'N/A';
-            const fat = food.rounded_nutrition_info?.g_fat ?? food.nutrition_info?.g_fat ?? 'N/A';
-            const size = food.serving_size ? `(${food.serving_size})` : '';
-
-            const div = document.createElement('div');
-            div.className = 'menu-item';
-            div.innerHTML = `
-              <div class="item-info">
-                <h4 style="margin: 0 0 5px 0;">${food.name} <small style="color:#aaa">${size}</small></h4>
-                <div class="item-meta">
-                  <strong>${cals} Cals</strong> | P: ${protein}g | C: ${carbs}g | F: ${fat}g
-                </div>
-              </div>
-              <button onclick="addFood('${escapeQuotes(food.name)}', ${cals})" style="width: auto;">+ Add</button>
-            `;
-            container.appendChild(div);
-          });
-        }
+      // Group items by station name
+      const grouped = {};
+      items.forEach(item => {
+        const station = item.station || item.category || 'General';
+        if (!grouped[station]) grouped[station] = [];
+        grouped[station].push(item);
       });
-    }
 
-    if (!itemsFound) {
-      container.innerHTML = '<p>No menu items found in the synced JSON file.</p>';
-    }
-  }
+      // Generate HTML for each station group
+      for (const [stationName, stationItems] of Object.entries(grouped)) {
+        const stationSection = document.createElement('div');
+        stationSection.className = 'station-group';
+        stationSection.setAttribute('data-station', stationName);
 
-  function escapeQuotes(str) {
-    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-  }
+        let itemsHTML = stationItems.map(item => {
+          // Extract food name and calories safely
+          const name = item.text || (item.item && item.item.name) || 'Unknown Item';
+          const calories = item.calories !== undefined && item.calories !== null 
+            ? `${item.calories} kcal` 
+            : 'N/A';
 
-  function addFood(name, cals) {
-    loggedFood.push({ id: Date.now(), name, cals });
-    saveAndRenderLog();
-  }
+          return `
+            <div class="food-card" data-name="${name.toLowerCase()}">
+              <h4>${name}</h4>
+              <span class="calories-badge">${calories}</span>
+            </div>
+          `;
+        }).join('');
 
-  function removeFood(id) {
-    loggedFood = loggedFood.filter(item => item.id !== id);
-    saveAndRenderLog();
-  }
-
-  function clearLog() {
-    loggedFood = [];
-    saveAndRenderLog();
-  }
-
-  function saveAndRenderLog() {
-    localStorage.setItem('iu_cals_log', JSON.stringify(loggedFood));
-    
-    const container = document.getElementById('loggedItems');
-    const totalEl = document.getElementById('totalCals');
-    
-    container.innerHTML = '';
-    let totalCals = 0;
-
-    if (loggedFood.length === 0) {
-      container.innerHTML = '<p style="color: var(--subtext); font-size: 0.9rem;">No items added yet.</p>';
-    } else {
-      loggedFood.forEach(item => {
-        totalCals += item.cals;
-        const div = document.createElement('div');
-        div.className = 'logged-item';
-        div.innerHTML = `
-          <span>${item.name} (${item.cals} cal)</span>
-          <button class="btn-remove" onclick="removeFood(${item.id})">&times;</button>
+        stationSection.innerHTML = `
+          <h3 class="station-title">${stationName}</h3>
+          <div class="food-grid">${itemsHTML}</div>
         `;
-        container.appendChild(div);
+
+        container.appendChild(stationSection);
+      }
+    }
+
+    // Apply Real-Time Search & Station Dropdown Filtering
+    function applyFilters() {
+      const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+      const selectedStation = document.getElementById('stationFilter').value;
+
+      const stationGroups = document.querySelectorAll('.station-group');
+
+      stationGroups.forEach(group => {
+        const groupStation = group.getAttribute('data-station');
+        const matchesStation = (selectedStation === 'all' || groupStation === selectedStation);
+
+        let visibleCardsInGroup = 0;
+        const cards = group.querySelectorAll('.food-card');
+
+        cards.forEach(card => {
+          const foodName = card.getAttribute('data-name');
+          const matchesSearch = foodName.includes(searchQuery);
+
+          if (matchesStation && matchesSearch) {
+            card.style.display = 'flex';
+            visibleCardsInGroup++;
+          } else {
+            card.style.display = 'none';
+          }
+        });
+
+        // Hide empty station headers when filtering
+        group.style.display = visibleCardsInGroup > 0 ? 'block' : 'none';
       });
     }
 
-    totalEl.textContent = totalCals;
-  }
-
-  // Load menu automatically when page loads
-  fetchMenu();
-  saveAndRenderLog();
-</script>
+    // Initial load on page startup
+    document.addEventListener('DOMContentLoaded', loadMenu);
+  </script>
 </body>
 </html>
