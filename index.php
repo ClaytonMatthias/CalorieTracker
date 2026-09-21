@@ -172,6 +172,44 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
   </style>
 </head>
 <body>
+
+  <header>
+    <h1>IU Dining Hall Calorie Tracker</h1>
+  </header>
+
+  <div class="container">
+    <!-- Controls Layout -->
+    <div class="controls-grid">
+      <div class="control-group">
+        <label for="locationSelect">Dining Hall</label>
+        <select id="locationSelect" onchange="loadMenu()">
+          <option value="mcnutt-dining-hall">McNutt Dining Hall</option>
+          <option value="forest-dining-hall">Forest Dining Hall</option>
+          <option value="wright-eatery">Wright Eatery</option>
+          <option value="collins-eatery">Collins Eatery</option>
+          <option value="goodbody-hall-eatery">Goodbody Hall Eatery</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="stationFilter">Station Filter</label>
+        <select id="stationFilter" onchange="applyFilters()">
+          <option value="all">All Stations</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="searchInput">Search Food</label>
+        <input 
+          type="text" 
+          id="searchInput" 
+          placeholder="e.g. Chicken, Pizza, Salad..." 
+          onkeyup="applyFilters()"
+        />
+      </div>
+    </div>
+
+    <!-- Main Dynamic Content Area -->
 <!-- Main Dynamic Content Area -->
 <div id="menuContainer">
   <div class="loading-spinner">Loading menu data...</div>
