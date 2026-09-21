@@ -268,6 +268,26 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       display: none;
     }
 
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .drawer-header h3 {
+      margin: 0;
+    }
+
+    .clear-btn {
+      background: transparent;
+      border: none;
+      color: #d9534f;
+      font-size: 0.8rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
     .log-item {
       display: flex;
       justify-content: space-between;
@@ -342,7 +362,10 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
 
   <!-- Sliding Log Drawer -->
   <div id="logDrawer" class="log-drawer hidden">
-    <h3 style="margin-top:0;">My Meal Log</h3>
+    <div class="drawer-header">
+      <h3>My Meal Log</h3>
+      <button class="clear-btn" onclick="clearTracker()">Clear All</button>
+    </div>
     <div id="logItemsContainer">
       <p class="empty-msg">No items added yet.</p>
     </div>
@@ -351,6 +374,19 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
   <script>
     let currentRawData = null;
     let mealLog = [];
+
+    function initTracker() {
+      const savedLog = localStorage.getItem('iu_meal_log');
+      if (savedLog) {
+        try {
+          mealLog = JSON.parse(savedLog);
+        } catch (e) {
+          mealLog = [];
+        }
+      }
+      updateTrackerUI();
+      loadMenu();
+    }
 
     async function loadMenu() {
       const location = document.getElementById('locationSelect').value;
@@ -416,15 +452,35 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
         return;
       }
 
+      // Group items by station while removing duplicates and zero-calorie items
       const grouped = {};
-      items.forEach((item, idx) => {
+      
+      items.forEach((item) => {
+        const name = (item.text || (item.food && item.food.name) || 'Unknown Item').trim();
+        const macros = getNutritionalInfo(item);
+
+        // 1. FILTER: Omit zero-calorie items
+        if (macros.calories <= 0) return;
+
         const station = item.station || item.category || 'General';
         if (!grouped[station]) grouped[station] = [];
-        item._uniqueId = idx;
-        grouped[station].push(item);
+
+        // 2. DEDUPLICATE: Check if item with this name already exists in station
+        const alreadyExists = grouped[station].some(
+          existing => (existing.text || existing.food?.name || '').trim().toLowerCase() === name.toLowerCase()
+        );
+
+        if (!alreadyExists) {
+          grouped[station].push(item);
+        }
       });
 
+      let displayedTotal = 0;
+
       for (const [stationName, stationItems] of Object.entries(grouped)) {
+        if (stationItems.length === 0) continue;
+        displayedTotal += stationItems.length;
+
         const stationSection = document.createElement('div');
         stationSection.className = 'station-group';
         stationSection.setAttribute('data-station', stationName);
@@ -456,16 +512,32 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
 
         container.appendChild(stationSection);
       }
+
+      if (displayedTotal === 0) {
+        container.innerHTML = '<p style="text-align: center;">No high-calorie menu items found for this location today.</p>';
+      }
     }
 
     function addToTracker(nameEncoded, cals, protein, carbs, fat) {
       const name = decodeURIComponent(nameEncoded);
       mealLog.push({ name, cals, protein, carbs, fat });
-      updateTrackerUI();
+      saveAndSyncUI();
     }
 
     function removeFromTracker(index) {
       mealLog.splice(index, 1);
+      saveAndSyncUI();
+    }
+
+    function clearTracker() {
+      if (confirm('Are you sure you want to clear your logged meal?')) {
+        mealLog = [];
+        saveAndSyncUI();
+      }
+    }
+
+    function saveAndSyncUI() {
+      localStorage.setItem('iu_meal_log', JSON.stringify(mealLog));
       updateTrackerUI();
     }
 
@@ -532,7 +604,7 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       });
     }
 
-    document.addEventListener('DOMContentLoaded', loadMenu);
+    document.addEventListener('DOMContentLoaded', initTracker);
   </script>
 </body>
 </html>
