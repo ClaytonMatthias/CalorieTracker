@@ -215,7 +215,7 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
     </div>
   </div>
 
-  <script>
+ <script>
     let currentRawData = null;
 
     // Fetch JSON menu data for the selected location
@@ -250,7 +250,6 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
       const stations = new Set();
 
       items.forEach(item => {
-        // Use text header or station label from Nutrislice item schema
         const station = item.station || item.category || 'General';
         if (station) stations.add(station);
       });
@@ -261,6 +260,19 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
         opt.textContent = station;
         stationFilter.appendChild(opt);
       });
+    }
+
+    // Safely extract macronutrient info from item structure
+    function getNutritionalInfo(item) {
+      const foodObj = item.food || item.item || {};
+      const info = foodObj.rounded_nutrition_info || item.rounded_nutrition_info || {};
+
+      return {
+        calories: info.calories ?? item.calories ?? 'N/A',
+        protein: info.protein ? `${info.protein}g` : '--',
+        carbs: info.carbohydrates ? `${info.carbohydrates}g` : '--',
+        fat: info.total_fat ? `${info.total_fat}g` : '--'
+      };
     }
 
     // Render grouped station cards
@@ -289,16 +301,30 @@ if (isset($_GET['api_action']) &&$_GET['api_action'] === 'menu') {
         stationSection.setAttribute('data-station', stationName);
 
         let itemsHTML = stationItems.map(item => {
-          // Extract food name and calories safely
-          const name = item.text || (item.item && item.item.name) || 'Unknown Item';
-          const calories = item.calories !== undefined && item.calories !== null 
-            ? `${item.calories} kcal` 
-            : 'N/A';
+          const name = item.text || (item.food && item.food.name) || 'Unknown Item';
+          const macros = getNutritionalInfo(item);
+          const calDisplay = macros.calories !== 'N/A' ? `${macros.calories} kcal` : 'N/A';
 
           return `
             <div class="food-card" data-name="${name.toLowerCase()}">
-              <h4>${name}</h4>
-              <span class="calories-badge">${calories}</span>
+              <div>
+                <h4>${name}</h4>
+                <span class="calories-badge">${calDisplay}</span>
+              </div>
+              <div class="macro-grid">
+                <div class="macro-item">
+                  <span class="macro-label">Protein</span>
+                  <span class="macro-value">${macros.protein}</span>
+                </div>
+                <div class="macro-item">
+                  <span class="macro-label">Carbs</span>
+                  <span class="macro-value">${macros.carbs}</span>
+                </div>
+                <div class="macro-item">
+                  <span class="macro-label">Fat</span>
+                  <span class="macro-value">${macros.fat}</span>
+                </div>
+              </div>
             </div>
           `;
         }).join('');
